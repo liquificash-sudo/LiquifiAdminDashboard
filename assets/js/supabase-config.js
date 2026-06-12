@@ -1,5 +1,5 @@
-// Supabase configuration is loaded from a secure runtime endpoint.
-// Fallback to environment defaults for local development.
+// Supabase configuration is loaded from a static env config file.
+// Fallback to in-repo defaults for local development.
 let SUPABASE_URL = '';
 let SUPABASE_ANON = '';
 let SUPABASE_CLIENT = null;
@@ -11,17 +11,24 @@ const FALLBACK_SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ
 async function loadPublicConfig() {
   try {
     const res = await fetch('/api/public-config');
-    if (res.ok) {
-      const json = await res.json();
-      SUPABASE_URL = json.supabaseUrl || FALLBACK_SUPABASE_URL;
-      SUPABASE_ANON = json.supabaseAnon || FALLBACK_SUPABASE_ANON;
-    } else {
-      throw new Error('API returned ' + res.status);
-    }
+    if (!res.ok) throw new Error('Public config returned ' + res.status);
+
+    const json = await res.json();
+    SUPABASE_URL = json.supabaseUrl || FALLBACK_SUPABASE_URL;
+    SUPABASE_ANON = json.supabaseAnon || FALLBACK_SUPABASE_ANON;
+
+    window.SEND_OTP_ENDPOINTS = Array.isArray(json.sendOtpEndpoints) && json.sendOtpEndpoints.length
+      ? json.sendOtpEndpoints
+      : ['/api/send-otp'];
+    window.SMS_ENABLED = json.smsEnabled ?? true;
+    window.SMS_PROVIDER = json.smsProvider || '2factor';
   } catch (err) {
-    console.warn('Public config endpoint unavailable, using fallback:', err.message);
+    console.warn('Public config unavailable, using fallback:', err.message);
     SUPABASE_URL = FALLBACK_SUPABASE_URL;
     SUPABASE_ANON = FALLBACK_SUPABASE_ANON;
+    window.SEND_OTP_ENDPOINTS = ['/api/send-otp'];
+    window.SMS_ENABLED = true;
+    window.SMS_PROVIDER = '2factor';
   }
 
   // Initialize Supabase client

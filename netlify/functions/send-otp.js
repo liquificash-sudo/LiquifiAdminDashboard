@@ -55,11 +55,8 @@ exports.handler = async (event) => {
       };
     }
 
-    const FROM_EMAIL = requestFromEmail || process.env.FROM_EMAIL;
+    const FROM_EMAIL = requestFromEmail || process.env.FROM_EMAIL || 'onboarding@resend.dev';
     const FROM_NAME = requestFromName || process.env.FROM_NAME || 'LiquiFi';
-    if (!FROM_EMAIL) {
-      return { statusCode: 500, body: JSON.stringify({ error: 'FROM_EMAIL is not configured' }) };
-    }
 
     const mailSubject = subject || 'Your LiquiFi OTP Code';
     const mailBody = message || `Your LiquiFi OTP is: ${otpCode}\n\nThis OTP expires in ${expiryMinutes} minutes. Do not share it with anyone.`;

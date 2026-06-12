@@ -4,7 +4,7 @@
 
 const APP_STATE_KEY = 'liquifiApplyState';
 const DEMO_OTP = '123456';
-let OPENROUTER_MODEL = 'mistral-small';
+const OPENROUTER_MODEL = 'mistral-small';
 
 // OTP Configuration
 const OTP_EXPIRY_MINS = 5;
@@ -160,9 +160,6 @@ function openModalWith(lt) {
     toggleAmtSlider(lt);
   }, 80);
 }
-// Preferred lightweight model; if unavailable the client will fallback to local responses.
-const OPENROUTER_MODEL = 'mistral-small';
-
 function closeModal(id) {
   document.getElementById(id).classList.remove('open');
   document.body.style.overflow = '';
@@ -694,6 +691,10 @@ function generateSessionId() {
   });
 }
 
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || '').trim());
+}
+
 async function storeOTPToDatabase(email, phone, otpCode, otpType = 'email') {
   try {
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINS * 60 * 1000).toISOString();
@@ -767,10 +768,12 @@ async function sendOTPViaEmail(email, otpCode) {
     otpCode,
     expiryMinutes: OTP_EXPIRY_MINS,
     subject: 'Your LiquiFi OTP Code',
-    message: `Your LiquiFi OTP is: ${otpCode}\n\nThis OTP expires in ${OTP_EXPIRY_MINS} minutes. Do not share it with anyone.`
+    message: `Your LiquiFi OTP is: ${otpCode}\n\nThis OTP expires in ${OTP_EXPIRY_MINS} minutes. Do not share it with anyone.`,
+    fromEmail: 'onboarding@resend.dev',
+    fromName: 'LiquiFi'
   };
 
-  const endpoints = ['/api/send-otp', '/.netlify/functions/send-otp'];
+  const endpoints = window.SEND_OTP_ENDPOINTS || ['/api/send-otp'];
 
   for (const endpoint of endpoints) {
     try {
@@ -793,13 +796,17 @@ async function sendOTPViaEmail(email, otpCode) {
       }
 
       const data = await res.json().catch(() => ({}));
-      console.log('✅ OTP sent successfully via Netlify function:', endpoint, data);
+      console.log('✅ OTP sent successfully via local API:', endpoint, data);
+      if (data.devFallback) {
+        console.warn('⚠️ Resend sandbox mode detected. Use the OTP shown below for local verification:', data.otpCode);
+        showToast(`⚠️ Dev mode: use OTP ${data.otpCode}`, 'error');
+      }
       return true;
     } catch (e) {
       console.warn(`⚠️ Attempt to send OTP via ${endpoint} failed:`, e.message || e);
       if (endpoint === endpoints[endpoints.length - 1]) {
         if (e.message && /405|404/.test(e.message)) {
-          throw new Error('Serverless email endpoint not available. Deploy to Netlify or run Netlify Dev.');
+          throw new Error('OTP endpoint not available. Check /api/public-config and your local server path.');
         }
         throw new Error(e.message || 'Unable to send OTP email. Please try again later.');
       }
@@ -808,7 +815,7 @@ async function sendOTPViaEmail(email, otpCode) {
 }
 
 async function sendOTPViaSMS(phone, otpCode) {
-  if (!SMS_ENABLED || SMS_PROVIDER !== '2factor') {
+  if (!window.SMS_ENABLED || window.SMS_PROVIDER !== '2factor') {
     console.log('ℹ️ SMS disabled or unsupported provider.');
     return false;
   }
@@ -820,7 +827,7 @@ async function sendOTPViaSMS(phone, otpCode) {
     message: `Your LiquiFi OTP is ${otpCode}. It expires in ${OTP_EXPIRY_MINS} minutes.`
   };
 
-  const endpoints = ['/api/send-otp', '/.netlify/functions/send-otp'];
+  const endpoints = window.SEND_OTP_ENDPOINTS || ['/api/send-otp'];
 
   for (const endpoint of endpoints) {
     try {
@@ -969,7 +976,20 @@ async function verifyOTPServer(sessionId, otpCode) {
 
 /* ── EMAIL VERIFICATION (Firebase Auth) ───────────────── */
 async function sendEmailOTP() {
-  if (!LEAD.email) {
+  const email = String(LEAD.email || '').trim();
+  if (!isValidEmail(email)) {
+    const emailField = document.getElementById('fEmail');
+    if (emailField) emailField.classList.add('err');
+    const emailErr = document.getElementById('emailErr');
+    if (emailErr) {
+      emailErr.textContent = 'Enter a valid email address';
+      emailErr.classList.add('show');
+    }
+    showToast('Enter a valid email address first', 'error');
+    return;
+  }
+
+  if (!email) {
     showToast('Go back to Step 2 and enter email', 'error');
     return;
   }
@@ -987,13 +1007,13 @@ async function sendEmailOTP() {
 
   try {
     const otpCode = generateOTP(6);
-    console.log('📧 Generated OTP:', otpCode, 'for email:', LEAD.email);
+    console.log('📧 Generated OTP:', otpCode, 'for email:', email);
     
-    const sessionId = await storeOTPToDatabase(LEAD.email, null, otpCode, 'email');
+    const sessionId = await storeOTPToDatabase(email, null, otpCode, 'email');
     LEAD.otpSessionId = sessionId;
     console.log('✅ OTP stored with session ID:', sessionId);
 
-    const emailSent = await sendOTPViaEmail(LEAD.email, otpCode);
+    const emailSent = await sendOTPViaEmail(email, otpCode);
     if (emailSent) {
       console.log('✅ OTP email send initiated');
     }
@@ -1021,7 +1041,7 @@ async function sendEmailOTP() {
       if (remaining <= 0) { clearInterval(ti); }
     }, 1000);
 
-    showToast('✅ OTP sent to ' + LEAD.email + '. Enter the 6-digit code to verify.', 'success');
+    showToast('✅ OTP sent to ' + email + '. Enter the 6-digit code to verify.', 'success');
   } catch (e) {
     console.error('❌ Error sending OTP email:', e.message || e);
     showToast('❌ Failed to send OTP: ' + (e.message || 'Unknown'), 'error');
@@ -1445,7 +1465,8 @@ function getCurSvcStep() {
 }
 
 async function sendSvcEmailOTP() {
-  if(!SVC.email){ showToast('Enter email in Step 2','error'); return; }
+  const email = String(SVC.email || '').trim();
+  if(!isValidEmail(email)){ showToast('Enter a valid email in Step 2','error'); return; }
   const btn = document.getElementById('sendSvcOtpBtn');
   if (!btn) return;
   btn.disabled = true;
@@ -1453,10 +1474,10 @@ async function sendSvcEmailOTP() {
 
   try {
     const otpCode = generateOTP(6);
-    const sessionId = await storeOTPToDatabase(SVC.email, null, otpCode, 'email');
+    const sessionId = await storeOTPToDatabase(email, null, otpCode, 'email');
     SVC.otpSessionId = sessionId;
-    await sendOTPViaEmail(SVC.email, otpCode);
-    showToast('✅ OTP sent to '+SVC.email, 'success');
+    await sendOTPViaEmail(email, otpCode);
+    showToast('✅ OTP sent to '+email, 'success');
   } catch (e) {
     console.error('❌ Service OTP send failed:', e.message || e);
     showToast('❌ Failed to send OTP: '+ (e.message || 'Please try again later.'), 'error');
