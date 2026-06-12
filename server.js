@@ -5,13 +5,18 @@ const { URL } = require('node:url');
 
 const PORT = Number(process.env.PORT || 3000);
 const ROOT = __dirname;
+const ENV_FILE = path.join(ROOT, '.env');
 const EXAMPLE_ENV_FILE = path.join(ROOT, '.env.example');
 
 function loadEnvFile(filePath) {
-  if (!fs.existsSync(filePath)) return {};
+  if (!fs.existsSync(filePath)) {
+    console.log(`ℹ️ ${filePath} not found`);
+    return {};
+  }
 
   const contents = fs.readFileSync(filePath, 'utf8');
   const values = {};
+  const loadedKeys = [];
   for (const line of contents.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#') || !trimmed.includes('=')) continue;
@@ -21,13 +26,17 @@ function loadEnvFile(filePath) {
     if (key) {
       values[key] = value;
       process.env[key] = value;
+      loadedKeys.push(key);
     }
   }
-
+  
+  console.log(`✅ Loaded ${path.basename(filePath)}: ${loadedKeys.join(', ')}`);
   return values;
 }
 
-const ENV_VALUES = loadEnvFile(EXAMPLE_ENV_FILE);
+// Load .env first, then fallback to .env.example
+console.log('\n📁 Loading environment variables...');
+const ENV_VALUES = { ...loadEnvFile(EXAMPLE_ENV_FILE), ...loadEnvFile(ENV_FILE) };
 
 function sendJson(res, statusCode, body) {
   res.writeHead(statusCode, {
@@ -100,30 +109,43 @@ async function handleSendOtp(req, res) {
       fromName: requestFromName
     } = await readRequestBody(req);
 
+    console.log('📨 OTP Request received:', { phone, email, otpCode: otpCode ? '***' : 'missing' });
+
     if (!otpCode) {
       return sendJson(res, 400, { error: 'Missing otpCode' });
     }
 
     if (phone) {
-      const twoFactorApiKey = resolveFromEnv('TWOFACTOR_API_KEY', 'TWOFACTOR_API_KEY', '');
+      const twoFactorApiKey = process.env.TWOFACTOR_API_KEY || ENV_VALUES.TWOFACTOR_API_KEY || '';
+      console.log('🔑 Using TWOFACTOR_API_KEY:', twoFactorApiKey ? `${twoFactorApiKey.substring(0, 10)}...` : 'NOT FOUND');
+      
       if (!twoFactorApiKey) {
-        return sendJson(res, 500, { error: 'TWOFACTOR_API_KEY is not configured in .env.example' });
+        console.error('❌ TWOFACTOR_API_KEY not configured');
+        return sendJson(res, 500, { error: 'TWOFACTOR_API_KEY is not configured in .env or .env.example' });
       }
 
       const digits = String(phone || '').replace(/\D/g, '');
+      console.log('📱 Phone digits:', digits, 'length:', digits.length);
+      
       if (!digits || digits.length < 10) {
-        return sendJson(res, 400, { error: 'Invalid phone number' });
+        return sendJson(res, 400, { error: 'Invalid phone number - must be 10 digits' });
       }
 
       const twoFactorUrl = `https://2factor.in/API/V1/${twoFactorApiKey}/SMS/${digits}/${otpCode}`;
+      console.log('🌐 Calling 2factor API...');
+      
       const response = await fetch(twoFactorUrl, { method: 'GET' });
       const data = await response.json().catch(() => null);
 
+      console.log('📡 2factor response:', { status: response.status, statusText: response.statusText, data });
+
       if (!response.ok || !data || data.Status !== 'Success') {
         const errorText = data?.Details || data?.Message || (await response.text());
+        console.error('❌ 2factor API error:', { status: response.status, error: errorText });
         return sendJson(res, response.status || 500, { error: errorText || '2factor SMS failed' });
       }
 
+      console.log('✅ SMS sent successfully');
       return sendJson(res, 200, { success: true, service: '2factor', details: data });
     }
 
@@ -131,16 +153,20 @@ async function handleSendOtp(req, res) {
       return sendJson(res, 400, { error: 'Missing email or phone' });
     }
 
-    const resendApiKey = resolveFromEnv('RESEND_API_KEY', 'RESEND_API_KEY', '');
+    const resendApiKey = process.env.RESEND_API_KEY || ENV_VALUES.RESEND_API_KEY || '';
+    console.log('🔑 Using RESEND_API_KEY:', resendApiKey ? '✓ Set' : '✗ Missing');
+    
     if (!resendApiKey) {
-      return sendJson(res, 500, { error: 'RESEND_API_KEY is not configured in .env.example' });
+      console.error('❌ RESEND_API_KEY not configured');
+      return sendJson(res, 500, { error: 'RESEND_API_KEY is not configured in .env or .env.example' });
     }
 
-    const fromEmail = requestFromEmail || resolveFromEnv('FROM_EMAIL', 'FROM_EMAIL', 'onboarding@resend.dev');
-    const fromName = requestFromName || resolveFromEnv('FROM_NAME', 'FROM_NAME', 'LiquiFi');
+    const fromEmail = requestFromEmail || process.env.FROM_EMAIL || ENV_VALUES.FROM_EMAIL || 'onboarding@resend.dev';
+    const fromName = requestFromName || process.env.FROM_NAME || ENV_VALUES.FROM_NAME || 'LiquiFi';
     const mailSubject = subject || 'Your LiquiFi OTP Code';
     const mailBody = message || `Your LiquiFi OTP is: ${otpCode}\n\nThis OTP expires in ${expiryMinutes || 5} minutes. Do not share it with anyone.`;
 
+    console.log('📧 Sending email OTP to:', email);
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -156,12 +182,16 @@ async function handleSendOtp(req, res) {
       })
     });
 
+    console.log('📡 Resend API response status:', response.status);
+
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('❌ Resend API error:', { status: response.status, error: errorText });
       if (
         response.status === 403 &&
         /testing emails|verify a domain|sandbox/i.test(errorText)
       ) {
+        console.log('ℹ️ Resend sandbox mode - returning demo OTP');
         return sendJson(res, 200, {
           success: true,
           service: 'resend-sandbox',
@@ -174,8 +204,10 @@ async function handleSendOtp(req, res) {
       return sendJson(res, response.status, { error: errorText });
     }
 
+    console.log('✅ Email sent successfully');
     return sendJson(res, 200, { success: true, service: 'resend' });
   } catch (error) {
+    console.error('❌ handleSendOtp error:', error.message);
     return sendJson(res, 500, { error: error.message });
   }
 }
@@ -234,6 +266,16 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`LiquiFi local server running at http://localhost:${PORT}`);
-  console.log(`Using env source: ${EXAMPLE_ENV_FILE}`);
+  console.log(`\n✅ LiquiFi local server running at http://localhost:${PORT}`);
+  console.log(`📁 Environment files loaded: .env.example + .env`);
+  console.log(`\n🔧 Loaded environment variables:`);
+  console.log(`  SUPABASE_URL: ${process.env.SUPABASE_URL ? '✓ Set' : '✗ Missing'}`);
+  console.log(`  SUPABASE_ANON: ${process.env.SUPABASE_ANON ? '✓ Set' : '✗ Missing'}`);
+  console.log(`  TWOFACTOR_API_KEY: ${process.env.TWOFACTOR_API_KEY ? '✓ Set' : '✗ Missing'}`);
+  console.log(`  RESEND_API_KEY: ${process.env.RESEND_API_KEY ? '✓ Set' : '✗ Missing'}`);
+  console.log(`  SMS_ENABLED: ${process.env.SMS_ENABLED || 'true (default)'}`);
+  console.log(`  SMS_PROVIDER: ${process.env.SMS_PROVIDER || '2factor (default)'}`);
+  console.log(`\n📋 API Endpoints:`);
+  console.log(`  POST /api/send-otp - Send OTP via SMS or Email`);
+  console.log(`  GET /api/public-config - Get public configuration\n`);
 });

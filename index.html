@@ -454,29 +454,8 @@
         <div class="fgroup"><label>Full Name <span class="req">*</span></label><input type="text" id="fName" placeholder="Rahul Sharma" oninput="sanitizeName(this)"/><div class="ferr" id="nameErr">Enter your full name</div></div>
         <div class="fgroup">
           <label>Mobile Number (+91) <span class="req">*</span></label>
-          <div class="otp-row">
-            <div style="flex:1;margin-bottom:0">
-              <input type="tel" id="fPhone" placeholder="9876543210" maxlength="10" oninput="onPhoneInput(this)"/>
-              <div class="ferr" id="phoneErr">Enter valid 10-digit number</div>
-            </div>
-            <button class="otp-btn" id="sendPhoneOtpBtn" onclick="sendPhoneOTP()" style="height:41px">Send OTP</button>
-          </div>
-          <div id="fPhoneOtpWrap" style="display:none;margin-top:8px">
-            <div class="otp-digit-row">
-              <input class="otp-digit" maxlength="1" id="po0" oninput="poNext(0)" onkeydown="poBack(event,0)"/>
-              <input class="otp-digit" maxlength="1" id="po1" oninput="poNext(1)" onkeydown="poBack(event,1)"/>
-              <input class="otp-digit" maxlength="1" id="po2" oninput="poNext(2)" onkeydown="poBack(event,2)"/>
-              <input class="otp-digit" maxlength="1" id="po3" oninput="poNext(3)" onkeydown="poBack(event,3)"/>
-              <input class="otp-digit" maxlength="1" id="po4" oninput="poNext(4)" onkeydown="poBack(event,4)"/>
-              <input class="otp-digit" maxlength="1" id="po5" oninput="poNext(5)" onkeydown="poBack(event,5)"/>
-            </div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
-              <div class="otp-hint">Enter the 6-digit OTP sent to your mobile</div>
-              <span class="resend" onclick="sendPhoneOTP()">Resend</span>
-            </div>
-            <div class="ferr" id="phoneOtpErr" style="margin-top:6px">Incorrect OTP</div>
-            <div class="otp-verified-badge" id="phoneVerifiedBadge">✓ Mobile Verified</div>
-          </div>
+          <input type="tel" id="fPhone" placeholder="9876543210" maxlength="10" oninput="onPhoneInput(this)"/>
+          <div class="ferr" id="phoneErr">Enter valid 10-digit number</div>
         </div>
       </div>
       <div class="frow">
@@ -570,45 +549,45 @@
         <label>Additional Notes (optional)</label>
         <textarea id="fNotes" rows="2" style="resize:vertical;width:100%;background:#fff;border:1.5px solid var(--border);border-radius:9px;padding:10px 13px;color:var(--text);font-family:var(--font);font-size:.88rem;outline:none;transition:.2s" placeholder="Anything specific about your requirement..."></textarea>
       </div>
-      <div class="step-nav"><button class="btn-back" onclick="goStep(2)">← Back</button><button class="btn-next" onclick="goStep(4)">Next: Verify Email →</button></div>
+      <div class="step-nav"><button class="btn-back" onclick="goStep(2)">← Back</button><button class="btn-next" onclick="goStep(4)">Next: Verify Phone →</button></div>
     </div>
 
     <!-- STEP 4: EMAIL VERIFY + SUBMIT -->
     <div class="form-step" id="appStep4">
-      <div class="mtitle">Verify Your <span class="grad-text">Email</span></div>
-      <p class="msub">Only email-verified leads are processed — this ensures your application is secure and prioritised.</p>
+      <div class="mtitle">Verify Your <span class="grad-text">Mobile</span></div>
+      <p class="msub">Only mobile-verified leads are processed — this ensures your application is secure and prioritised.</p>
       <div class="email-otp-box">
-        <span class="eob-icon">📧</span>
+        <span class="eob-icon">📱</span>
         <div class="eob-info">
-          <div class="eob-label">Verification link will be sent to</div>
-          <div class="eob-email" id="emailBadge">—</div>
+          <div class="eob-label">Verification OTP will be sent to</div>
+          <div class="eob-email" id="phoneBadge">—</div>
         </div>
         <button class="eob-change" onclick="goStep(2)">Change →</button>
       </div>
       <div class="fgroup">
         <label style="display:flex;align-items:center;justify-content:space-between">
-          <span>Email verification OTP <span class="req">*</span></span>
-          <button class="otp-btn" id="sendOtpBtn" onclick="sendEmailOTP()" style="height:32px;font-size:.72rem">Send OTP</button>
+          <span>Mobile OTP verification <span class="req">*</span></span>
+          <button class="otp-btn" id="sendMobileOtpBtn" onclick="sendMobileOTPStep4()" style="height:32px;font-size:.72rem">Send OTP</button>
         </label>
-        <div class="email-verify-info" id="emailVerifyInfo" style="margin-top:12px;font-size:.86rem;color:var(--text2);line-height:1.5">
-          Click “Send OTP” to receive a 6-digit code in your inbox. Enter it below to verify your email.
-        </div>
-        <div id="emailOtpWrap" style="margin-top:12px;display:none">
+        <div class="email-verify-info" id="mobileVerifyInfo" style="margin-top:12px;font-size:.86rem;color:var(--text2);line-height:1.5">
+          Click "Send OTP" to receive a 6-digit code via Phone Call. Enter it below to verify your mobile number.
+        </div>and
+        <div id="mobileOtpWrap" style="margin-top:12px;display:none">
           <div class="otp-digit-row" style="margin-bottom:8px">
-            <input class="otp-digit" maxlength="1" id="eo0" oninput="eoNext(0)" onkeydown="eoBack(event,0)" />
-            <input class="otp-digit" maxlength="1" id="eo1" oninput="eoNext(1)" onkeydown="eoBack(event,1)" />
-            <input class="otp-digit" maxlength="1" id="eo2" oninput="eoNext(2)" onkeydown="eoBack(event,2)" />
-            <input class="otp-digit" maxlength="1" id="eo3" oninput="eoNext(3)" onkeydown="eoBack(event,3)" />
-            <input class="otp-digit" maxlength="1" id="eo4" oninput="eoNext(4)" onkeydown="eoBack(event,4)" />
-            <input class="otp-digit" maxlength="1" id="eo5" oninput="eoNext(5)" onkeydown="eoBack(event,5)" />
+            <input class="otp-digit" maxlength="1" id="mo0" oninput="moNext(0)" onkeydown="moBack(event,0)" />
+            <input class="otp-digit" maxlength="1" id="mo1" oninput="moNext(1)" onkeydown="moBack(event,1)" />
+            <input class="otp-digit" maxlength="1" id="mo2" oninput="moNext(2)" onkeydown="moBack(event,2)" />
+            <input class="otp-digit" maxlength="1" id="mo3" oninput="moNext(3)" onkeydown="moBack(event,3)" />
+            <input class="otp-digit" maxlength="1" id="mo4" oninput="moNext(4)" onkeydown="moBack(event,4)" />
+            <input class="otp-digit" maxlength="1" id="mo5" oninput="moNext(5)" onkeydown="moBack(event,5)" />
           </div>
           <div style="display:flex;gap:10px;align-items:center;margin-bottom:6px">
-            <button class="otp-btn" onclick="resendEmailOTP()" style="height:36px;font-size:.78rem">Resend OTP</button>
-            <div class="otp-hint" id="emailOtpHint">OTP expires in <span id="emailOtpTimer">5</span> minutes</div>
+            <button class="otp-btn" onclick="resendMobileOTP()" style="height:36px;font-size:.78rem">Resend OTP</button>
+            <div class="otp-hint" id="mobileOtpHint">OTP expires in <span id="mobileOtpTimer">5</span> minutes</div>
           </div>
         </div>
-        <div class="ferr" id="emailOtpErr" style="margin-top:8px;display:none"></div>
-        <div class="otp-verified-badge" id="emailVerifiedBadge">✓ Email Verified! Ready to submit.</div>
+        <div class="ferr" id="mobileOtpErr" style="margin-top:8px;display:none"></div>
+        <div class="otp-verified-badge" id="mobileVerifiedBadge">✓ Mobile Verified! Ready to submit.</div>
       </div>
       <div class="fcheck"><input type="checkbox" id="cConsent"/><label for="cConsent">I authorise LiquiFi to share my details with lender partners and contact me via call, SMS, or WhatsApp for loan offers. I confirm all information is accurate.</label></div>
       <div class="fcheck"><input type="checkbox" id="cTerms"/><label for="cTerms">I agree to LiquiFi's <a href="#" style="color:var(--blue)">Terms of Use</a> and <a href="#" style="color:var(--blue)">Privacy Policy</a>.</label></div>
